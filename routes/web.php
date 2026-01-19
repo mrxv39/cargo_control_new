@@ -6,9 +6,11 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
 
 Route::get('/check-share-links', function () {
+    $exists = DB::getSchemaBuilder()->hasTable('share_links');
+
     return [
-        'exists' => DB::getSchemaBuilder()->hasTable('share_links'),
-        'count' => DB::table('share_links')->count(),
+        'exists' => $exists,
+        'count' => $exists ? DB::table('share_links')->count() : null,
     ];
 });
 
