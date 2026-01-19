@@ -1,86 +1,47 @@
-<?php
-
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
-/*
-|--------------------------------------------------------------------------
-| Home (no depende de Vite)
-|--------------------------------------------------------------------------
-*/
-Route::get('/', function () {
-    return 'OK';
+Route::get('/files/test', function () {
+    return <<<HTML
+    <h3>Bucket test</h3>
+    <form method="POST" action="/files/test/upload" enctype="multipart/form-data">
+        <input type="file" name="f" required />
+        <button type="submit">Upload</button>
+    </form>
+    HTML;
 });
 
-/*
-|--------------------------------------------------------------------------
-| Diagnostics (TEMP) - DB connectivity
-|--------------------------------------------------------------------------
-*/
-Route::get('/check-db', function () {
-    try {
-        $row = DB::select('select 1 as ok');
-
-        return response()->json([
-            'db_connection' => config('database.default'),
-            'ok' => $row[0]->ok ?? null,
-        ]);
-    } catch (\Throwable $e) {
-        Log::error('check-db failed', ['error' => $e->getMessage()]);
-
-        return response()->json([
-            'error' => $e->getMessage(),
-            'db_connection' => config('database.default'),
-        ], 500);
-    }
-});
-
-/*
-|--------------------------------------------------------------------------
-| Diagnostics (TEMP) - share_links existence
-|--------------------------------------------------------------------------
-*/
-Route::get('/check-share-links', function () {
-    try {
-        $exists = DB::getSchemaBuilder()->hasTable('share_links');
-
-        return response()->json([
-            'exists' => $exists,
-            'count' => $exists ? DB::table('share_links')->count() : null,
-            'db_connection' => config('database.default'),
-        ]);
-    } catch (\Throwable $e) {
-        Log::error('check-share-links failed', ['error' => $e->getMessage()]);
-
-        return response()->json([
-            'error' => $e->getMessage(),
-            'db_connection' => config('database.default'),
-        ], 500);
-    }
-});
-
-/*
-|--------------------------------------------------------------------------
-| Share temporary link (private bucket -> public share URL)
-|--------------------------------------------------------------------------
-| Example:
-| /share/temp?path=uploads/xxx.pdf&minutes=1440
-*/
-Route::get('/share/temp', function (Request $request) {
+Route::post('/files/test/upload', function (Request $request) {
     $request->validate([
-        'path' => ['required', 'string'],
-        'minutes' => ['nullable', 'integer', 'min:1', 'max:10080'], // up to 7 days
+        'f' => ['required', 'file', 'max:20480'], // 20MB
     ]);
 
-    $path = $request->query('path');
-    $minutes = (int) ($request->query('minutes', 60));
+    $file = $request->file('f');
 
-    abort_unless(Storage::exists($path), 404);
+    $key = 'tests/'.now()->format('Ymd_His').'_'.Str::random(8).'_'.$file->getClientOriginalName();
 
-    return redirect()->away(
-        Storage::temporaryUrl($path, now()->addMinutes($minutes))
-    );
+    // Subir como privado
+    Storage::disk('private')->putFileAs('', $file, $key);
+
+    // URL temporal de descarga
+    $tmpUrl = Storage::disk('private')->temporaryUrl($key, now()->addMinutes(10));
+
+    return response()->json([
+        'ok' => 1,
+        'disk' => config('filesystems.default'),
+        'key' => $key,
+        'temporary_url_10m' => $tmpUrl,
+    ]);
+});
+
+Route::get('/files/test/download', function (Request $request) {
+    $key = $request->query('key');
+    abort_unless($key, 400, 'Missing ?key=');
+
+    // Verifica que exista
+    abort_unless(Storage::disk('private')->exists($key), 404, 'Not found');
+
+    // Descarga forzada (stream)
+    return Storage::disk('private')->download($key);
 });
