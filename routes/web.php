@@ -1,16 +1,28 @@
+<?php
+
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Route;
+
+Route::get('/ping', fn () => 'pong');
 
 Route::get('/files/test', function () {
     return <<<HTML
+<!doctype html>
+<html>
+  <head><meta charset="utf-8"><title>Bucket test</title></head>
+  <body>
     <h3>Bucket test</h3>
     <form method="POST" action="/files/test/upload" enctype="multipart/form-data">
-        <input type="file" name="f" required />
-        <button type="submit">Upload</button>
+      <input type="hidden" name="_token" value="__CSRF__">
+      <input type="file" name="f" required />
+      <button type="submit">Upload</button>
     </form>
-    HTML;
-});
+  </body>
+</html>
+HTML;
+})->withoutMiddleware([\App\Http\Middleware\VerifyCsrfToken::class]);
 
 Route::post('/files/test/upload', function (Request $request) {
     $request->validate([
@@ -21,27 +33,22 @@ Route::post('/files/test/upload', function (Request $request) {
 
     $key = 'tests/'.now()->format('Ymd_His').'_'.Str::random(8).'_'.$file->getClientOriginalName();
 
-    // Subir como privado
     Storage::disk('private')->putFileAs('', $file, $key);
 
-    // URL temporal de descarga
     $tmpUrl = Storage::disk('private')->temporaryUrl($key, now()->addMinutes(10));
 
     return response()->json([
         'ok' => 1,
-        'disk' => config('filesystems.default'),
         'key' => $key,
         'temporary_url_10m' => $tmpUrl,
     ]);
-});
+})->withoutMiddleware([\App\Http\Middleware\VerifyCsrfToken::class]);
 
 Route::get('/files/test/download', function (Request $request) {
     $key = $request->query('key');
     abort_unless($key, 400, 'Missing ?key=');
 
-    // Verifica que exista
     abort_unless(Storage::disk('private')->exists($key), 404, 'Not found');
 
-    // Descarga forzada (stream)
     return Storage::disk('private')->download($key);
 });
