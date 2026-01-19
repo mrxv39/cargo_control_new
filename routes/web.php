@@ -13,7 +13,6 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
-Route::get('/test-bucket', function () {
-    Storage::put('test/ok.txt', 'bucket funcionando');
-    return Storage::get('test/ok.txt');
+Route::get('/', function () {
+    return view('welcome');
 });
