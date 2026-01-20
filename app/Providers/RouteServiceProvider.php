@@ -17,12 +17,6 @@ class RouteServiceProvider extends ServiceProvider
         $this->configureRateLimiting();
 
         $this->routes(function () {
-
-            // ✅ PROBE: si esto NO aparece en route:list, el provider no se está ejecutando
-            Route::middleware('web')->get('/_probe', function () {
-                return response('OK_WEB_PROBE', 200);
-            });
-
             Route::middleware('api')
                 ->prefix('api')
                 ->group(base_path('routes/api.php'));
